@@ -1,6 +1,5 @@
 # -------------------
-# Author: Rahul Narkhede
-# Team: Sherlock
+# Author: Rahul Narkhede 
 # Script to create a Dash-based web-app that visualizes data from a .txt file and interpolates a surface using RBF interpolation
 # Refer to the RBFInterpolationApp_Helper.ipynb notebook to understand the working of the surface interpolation method
 
@@ -146,9 +145,9 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
         return {}, html.Div()  # Return empty outputs if not clicked
     
     # Range of RBF interpolation parameters to try for best fit
-    nx_values = [10, 30, 60]  # values for nx: number of centers along x axis
-    ny_values = [10, 30, 60]  # values for ny: number of centers along y axis
-    sigma_values = [0.1, 0.3, 0.5]  # values for sigma: std. deviation of a Gaussian kernel
+    nx_values = [10, 20, 40]  # values for nx: number of centers along x axis
+    ny_values = [10, 20, 40]  # values for ny: number of centers along y axis
+    sigma_values = [0.05, 0.1, 0.3]  # values for sigma: std. deviation of a Gaussian kernel
 
 
     # Prepare data 
