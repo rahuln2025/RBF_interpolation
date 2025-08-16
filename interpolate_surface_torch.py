@@ -23,9 +23,9 @@ def main():
     data = pd.read_csv(txt_file_path, delimiter=',', header=None, names=["x", "y", "z"])
 
     # Range of RBF interpolation parameters to try for best fit
-    nx_values = [10, 20]  # values for nx: number of centers along x axis
-    ny_values = [10, 20]  # values for ny: number of centers along y axis
-    sigma_values = [0.05, 0.1]  # values for sigma: std. deviation of a Gaussian kernel
+    nx_values = [20, 40, 60]  # values for nx: number of centers along x axis
+    ny_values = [20, 40, 60]  # values for ny: number of centers along y axis
+    sigma_values = [0.05, 0.075, 0.1]  # values for sigma: std. deviation of a Gaussian kernel
 
     # Define variables
     x_col = "x"
@@ -98,7 +98,7 @@ def main():
 
         # Calculate the validation error (MSE)
         val_mse = mean_squared_error(val_data['z'], zi_val)
-        print(f"{nx:3.0f} {ny:3.0f} {sigma:6.3f} {val_mse:10.4f}")
+        print(f"{nx:3.0f} {ny:3.0f} {sigma:6.3f} {val_mse:10.4f} {cond:10.4f}")
         # Check if this is the best parameter set
         if val_mse < best_mse:
             best_mse = val_mse
@@ -108,7 +108,7 @@ def main():
     # Use the best parameters found
     final_nx, final_ny, final_sigma = best_params
     print(f"Best params:")
-    print(f"nx: {final_nx}, ny: {final_ny}, sigma:{final_sigma} with MSE: {val_mse}")
+    print(f"nx: {final_nx}, ny: {final_ny}, sigma:{final_sigma} with MSE: {best_mse}")
 
     # Perform interpolation again with the best parameters
     centers = select_points_kmeans(surf1_scaled[['x', 'y']].to_numpy(), nx=int(final_nx), ny=int(final_ny))
@@ -160,7 +160,7 @@ def main():
         y=surf1['y'],
         z=surf1['z'],
         mode='markers',
-        marker=dict(size=5, color=surf1['z'], colorscale='Viridis', showscale=True),
+        marker=dict(size=1, color=surf1['z'], colorscale='Viridis', showscale=True),
         name='Scatter',
         hoverinfo='text',
         hovertemplate='X: %{x:}<br>Y: %{y:}<br>Z: %{z:}<extra></extra>',
@@ -208,7 +208,7 @@ def main():
         x=surf1['x'],
         y=surf1['z'],
         mode='markers',
-        marker=dict(color='red', size=5),
+        marker=dict(color='red', size=2),
         name='True'
     ))
     # interpolated data
@@ -218,7 +218,7 @@ def main():
         mode='markers',
         line=dict(color='blue', width=2),  # Set line color and width
         name='Best Fit',
-        opacity=0.5  # Set transparency for the line here
+        opacity=0.8  # Set transparency for the line here
     ))
     projection_x.update_layout(
         title='Projection along X',
@@ -237,7 +237,7 @@ def main():
         x=surf1['y'],
         y=surf1['z'],
         mode='markers',
-        marker=dict(color='red', size=5),
+        marker=dict(color='red', size=2),
         name='True'
     ))
     # interpolated data
@@ -247,7 +247,7 @@ def main():
         mode='markers',
         line=dict(color='blue', width=2),  # Set line color and width
         name='Best Fit',
-        opacity=0.5  # Set transparency for the line here
+        opacity=0.8  # Set transparency for the line here
     ))
     projection_y.update_layout(
         title='Projection along Y',
@@ -277,13 +277,13 @@ def main():
     fig.write_html(surface_plot_path)
     
     # # Save projection plots as HTML files
-    # projection_x.write_html("projection_x.html")
-    # projection_y.write_html("projection_y.html")
+    projection_x.write_html("projection_x.html")
+    projection_y.write_html("projection_y.html")
     
     print("Files saved:")
     print("- surface_plot.html (3D surface plot)")
-    # print("- projection_x.html (X-axis projection)")
-    # print("- projection_y.html (Y-axis projection)")
+    print("- projection_x.html (X-axis projection)")
+    print("- projection_y.html (Y-axis projection)")
 
 
     # return fig, projection_layout
