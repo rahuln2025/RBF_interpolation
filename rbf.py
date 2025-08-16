@@ -8,6 +8,8 @@ import tensorflow as tf
 from sklearn.cluster import KMeans
 from scipy.linalg import lu, inv
 
+
+
 from utils import *
 
 def select_points_grid(points, nx, ny):

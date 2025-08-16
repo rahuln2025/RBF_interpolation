@@ -3,6 +3,8 @@ import os
 import numpy as np
 import pandas as pd
 import base64
+import tensorflow as tf
+
 # import plotly.graph_objects as go
 # from dash import Dash, dcc, html, Input, Output
 # import dash_bootstrap_components as dbc
@@ -12,7 +14,7 @@ from sklearn.metrics import mean_squared_error
 import time
 import itertools
 # Custom scripts for RBF Interpolation
-from rbf import select_points_kmeans, interpolate, rbf_interpolation
+from rbf import select_points_kmeans, interpolate, rbf_interpolation, rbf_interpolation_tf
 
 def main():
     txt_file_path = "./surf1.txt" #sys.argv[1]
@@ -20,7 +22,7 @@ def main():
     # Load the dataset
     # For TXT files with comma-separated values, use read_csv with appropriate parameters
     data = pd.read_csv(txt_file_path, delimiter=',', header=None, names=["x", "y", "z"])
-
+    print(data.head())
     # Range of RBF interpolation parameters to try for best fit
     nx_values = [10, 20]  # values for nx: number of centers along x axis
     ny_values = [10, 20]  # values for ny: number of centers along y axis
@@ -86,7 +88,7 @@ def main():
             # cond is a metadata property showing the stability of the matrix inversions(ref. condition matrix)
             # mse is the MSE obtained between original and interpolated data for the same (x, y) coordinates as in original data
             # residual is the difference between original and interpolated point at each coordinate (x, y)
-            s, lamdas, cond, mse, residual = rbf_interpolation_tf(train_data, centers, sigma=sigma)
+            s, lamdas, cond, mse, residual = rbf_interpolation(train_data, centers, sigma=sigma)
         except (ZeroDivisionError, np.linalg.LinAlgError):
             continue  # Skip this parameter set if there's a division by zero
         
@@ -112,7 +114,7 @@ def main():
     centers = select_points_kmeans(surf1_scaled[['x', 'y']].to_numpy(), nx=int(final_nx), ny=int(final_ny))
 
     # Perform the final interpolation
-    s, lamdas, cond, mse, residual = rbf_interpolation_tf(surf1_scaled, centers, sigma=final_sigma)
+    s, lamdas, cond, mse, residual = rbf_interpolation(surf1_scaled, centers, sigma=final_sigma)
 
     # Create a meshgrid for interpolation
     xi = np.linspace(0, 1, 100)
@@ -285,8 +287,8 @@ def main():
 
 
     # return fig, projection_layout
-    if __name__ == '__main__':
-        try:
-            main()
-        except Exception as e:
-            print(f"An error occurred: {e}")
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:
+        print(f"An error occurred: {e}")

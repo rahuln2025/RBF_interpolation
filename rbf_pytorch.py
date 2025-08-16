@@ -357,7 +357,7 @@ def rbf_interpolation_torch(data, centers, sigma):
     residual = z - s_xy
     mse = torch.mean(torch.square(z - s_xy))
 
-    return s_xy.numpy(), lambdas.numpy(), cond_mat.numpy(), mse.numpy(), residual.numpy()
+    return s_xy.numpy(), lambdas.numpy(), cond_mat.numpy()[0], mse.numpy(), residual.numpy()
 
     
 def interpolate_torch(x_vec, centers, lambdas, sigma):

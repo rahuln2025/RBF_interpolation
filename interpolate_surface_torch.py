@@ -15,6 +15,28 @@ import itertools
 # Custom scripts for RBF Interpolation
 from rbf_pytorch import *
 
+
+
+def points_to_xvec(points_txt:str, scaler_x, scaler_y):
+    df = pd.read_csv(points_txt, delimiter=",", header=None, names=["x", "y"])
+    print(f"Number of sampling points:{len(df)}")
+    #scale the sampling point x, y coords 
+    df_scaled = pd.DataFrame(scaler_x.fit_transform(df[["x"]]), columns=["x"])
+    df_scaled["y"] = scaler_y.fit_transform(df_scaled[["y"]])
+    
+    # create meshgrid and input for rbf interpolation
+    xi, yi = np.meshgrid(df_scaled["x"].to_numpy(), df_scaled["y"].to_numpy())
+    x_vec = np.column_stack((xi.flatten(), yi.flatten()))
+
+    return x_vec, df
+
+def interpolate_sampling_points(x_vec, centers, lambdas, sigma, df, scaler_z):
+    zi = interpolate_torch(x_vec, centers, lambdas, sigma).reshape(len(df), len(df))
+    zi_descaled = scaler_z.inverse_transform(zi.flatten().reshape(-1, 1)).flatten()
+    df["z"] = zi_descaled
+    return df, zi, zi_descaled
+
+
 def main():
     txt_file_path = "./surf1.txt" #sys.argv[1]
 
@@ -139,6 +161,21 @@ def main():
     z_min = min(surf1['z'].min(), original_zi.min())
     z_max = max(surf1['z'].max(), original_zi.max())
 
+    # sampling points
+    x_vec_sampling, sampling_df = points_to_xvec(points_txt = "./sampling_points.txt", 
+                           scaler_x = scaler_x, 
+                           scaler_y = scaler_y, 
+                           )
+
+    sampling_df, zi_sampling, zi_descaled_sampling = interpolate_sampling_points(x_vec_sampling,
+                                                               centers, 
+                                                               lamdas,
+                                                               final_sigma, 
+                                                               sampling_df, 
+                                                               scaler_z)
+    
+
+
     # Plot scatter and surface togther in one plot 
     # Create the surface plot with descaled values
     surface = go.Surface(
@@ -146,7 +183,7 @@ def main():
         y=original_yi.reshape(yi.shape),
         z=original_zi.reshape(zi.shape),
         colorscale='Viridis',
-        opacity=0.3,
+        opacity=0.8,
         showscale=False,
         name='Surface',
         hoverinfo='text',
@@ -160,14 +197,25 @@ def main():
         y=surf1['y'],
         z=surf1['z'],
         mode='markers',
-        marker=dict(size=1, color=surf1['z'], colorscale='Viridis', showscale=True),
+        marker=dict(size=1, color=surf1['z'], colorscale='PuRd', showscale=True),
         name='Scatter',
         hoverinfo='text',
         hovertemplate='X: %{x:}<br>Y: %{y:}<br>Z: %{z:}<extra></extra>',
     )
 
+    scatter_sampling = go.Scatter3d(
+        x=sampling_df["x"], 
+        y=sampling_df["y"], 
+        z=sampling_df["z"], 
+        mode="markers", 
+        marker=dict(size=4, color='black', symbol='x'), 
+        name="SamplingPoints", 
+        hoverinfo="text", 
+        hovertemplate='Sampling Point<br>X: %{x:}<br>Y: %{y:}<br>Z: %{z:}<extra></extra>'
+    )
+
     # Create figure with both surface and scatter data
-    fig = go.Figure(data=[surface, scatter])
+    fig = go.Figure(data=[surface, scatter_sampling])
 
     # Define layout with common scale
     # to add MSE in title: f"<i>Validation MSE: {best_mse:.2f}</i><br>"
@@ -288,7 +336,5 @@ def main():
 
     # return fig, projection_layout
 if __name__ == '__main__':
-    try:
-        main()
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    
+    main()
