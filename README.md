@@ -1,68 +1,64 @@
-# RBF Interpolation Dashboard
+# RBF Interpolation with PyTorch
 
-A Dash-based web application for visualizing data and performing surface interpolation using Radial Basis Function (RBF) interpolation with Gaussian kernels.
-
-## Author
-- **Rahul Narkhede**
+A PyTorch-based implementation for Radial Basis Function (RBF) interpolation with Gaussian kernels, featuring both standalone scripts and a minimal Dash web interface.
 
 ## Description
 
-This project provides an interactive web interface for:
-- Loading and visualizing 3D data from CSV/TXT files
-- Performing RBF interpolation with automatic parameter optimization
-- Displaying 3D surface plots with original data scatter points
-- Showing projection plots along X and Y axes
+This project provides GPU-accelerated RBF interpolation for 3D surface reconstruction:
+- Standalone surface interpolation with automatic parameter optimization
+- Interactive web interface for real-time visualization
+- Sampling point interpolation from custom coordinate files
+- 3D surface plots with projection views
 
-## Features
+## Key Features
 
-- Interactive column selection for X, Y, and Z coordinates
-- Optional data scaling between [0, 1]
-- Automatic parameter optimization using cross-validation
-- 3D surface visualization with Plotly
-- Projection plots for better data understanding
-- Responsive web interface using Dash and Bootstrap
+- **PyTorch Backend**: GPU acceleration for faster computation
+- **Parameter Optimization**: Automatic cross-validation for nx, ny, sigma parameters
+- **Sampling Points**: Interpolate custom sampling coordinates and display as markers
+- **3D Visualization**: Interactive surface plots with original data and sampling points
+- **Minimal Interface**: Simple web UI
 
-## Files
+## Project Structure
 
-- `dash_app.py` - Main Dash application
-- `rbf.py` - RBF interpolation functions
-- `utils.py` - Utility functions
-- `job_script.sh` - Job submission script for cluster environments
-- `surf1.txt`, `surf2.txt` - Sample data files
+```
+├── interpolate_surface_torch.py    # Main interpolation script
+├── dash_app.py                     # Minimal web interface  
+├── rbf_pytorch.py                  # PyTorch RBF functions
+├── data/
+│   ├── surf1.txt                   # Sample surface data
+│   └── sampling_points.txt         # Custom sampling coordinates
+├── results/                        # Generated plots and outputs
+└── rbf_interpolation_env.yml       # Conda environment
+```
 
-## Requirements
+## Quick Start
 
-- Python 3.x
-- dash
-- dash-bootstrap-components
-- plotly
-- pandas
-- numpy
-- scikit-learn
-
-## Usage
-
-1. Install required packages:
+1. **Setup Environment**:
    ```bash
-   pip install dash dash-bootstrap-components plotly pandas numpy scikit-learn
+   conda env create -f rbf_interpolation_env.yml
+   conda activate rbf_interpolation_env
    ```
 
-2. Run the application:
+2. **Run Interpolation**:
+   ```bash
+   python interpolate_surface_torch.py
+   ```
+
+3. **Launch Web Interface**:
    ```bash
    python dash_app.py
    ```
+   Navigate to `http://localhost:8051`
 
-3. Open your browser and navigate to `http://localhost:8051`
+## Requirements
 
-4. Select your data columns and click "Run Interpolation" to generate the visualization
+- Python 3.8+
+- PyTorch
+- Dash, Plotly
+- NumPy, Pandas
+- Scikit-learn
 
-## Notes
+## Data Format
 
-- The application uses K-means clustering to select RBF centers for irregular data
-- Parameters (nx, ny, sigma) are automatically optimized using validation data
-- The app is configured to run on port 8051 by default
-- Designed to work in university cluster environments with port forwarding
-
-## Reference
-
-Refer to the RBFInterpolationApp_Helper.ipynb notebook to understand the working of the surface interpolation method.
+Input files should be comma-separated with columns: `x,y,z`
+Sampling points file: `x,y` coordinates for interpolation
