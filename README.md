@@ -4,6 +4,8 @@ A PyTorch-based implementation for Radial Basis Function (RBF) interpolation wit
 
 [Checkout the interactive plots](https://rahuln2025.github.io/RBF_interpolation/)
 
+*This project was my solution to a programming task with a timeline of 1 week for an application to a student-job in ASML Berlin. I modified my solution (which used TensorFlow for GPU computations) and added the dash-app later.* 
+
 ## Description
 
 This project provides GPU-accelerated RBF interpolation for 3D surface reconstruction:
@@ -11,6 +13,7 @@ This project provides GPU-accelerated RBF interpolation for 3D surface reconstru
 - Interactive web interface for real-time visualization
 - Sampling point interpolation from custom coordinate files
 - 3D surface plots with projection views
+
 
 
 ## Key Features
