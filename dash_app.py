@@ -1,13 +1,12 @@
 # -------------------
 # Author: Rahul Narkhede 
-# Script to create a Dash-based web-app that visualizes data from a .txt file and interpolates a surface using RBF interpolation
-# Refer to the RBFInterpolationApp_Helper.ipynb notebook to understand the working of the surface interpolation method
-
+# Minimal Dash-based web-app that visualizes data from a .txt file and interpolates a surface using RBF interpolation with PyTorch
 
 import sys
 import numpy as np
 import pandas as pd
 import base64
+import torch
 import plotly.graph_objects as go
 from dash import Dash, dcc, html, Input, Output
 import dash_bootstrap_components as dbc
@@ -16,8 +15,9 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 import time
 import itertools
+from collections import defaultdict
 # Custom scripts for RBF Interpolation
-from rbf import select_points_kmeans, interpolate, rbf_interpolation
+from rbf_pytorch import select_points_kmeans, interpolate_torch, rbf_interpolation_torch
 
 
 # Read TXT file path from command line arguments
@@ -107,6 +107,35 @@ def encode_image(image_path):
         encoded_image = base64.b64encode(f.read()).decode('utf-8')
     return f'data:image/png;base64,{encoded_image}'
 
+def points_to_xvec(points_txt: str, scaler_x, scaler_y):
+    '''
+    Convert sampling points from text file to scaled x_vec for interpolation
+    '''
+    try:
+        df = pd.read_csv(points_txt, delimiter=",", header=None, names=["x", "y"])
+        print(f"Number of sampling points: {len(df)}")
+        
+        # Scale the sampling point x, y coords 
+        df_scaled = pd.DataFrame(scaler_x.transform(df[["x"]]), columns=["x"])
+        df_scaled["y"] = scaler_y.transform(df[["y"]])
+        
+        # Create input for rbf interpolation
+        x_vec = df_scaled[["x", "y"]].to_numpy()
+
+        return x_vec, df
+    except FileNotFoundError:
+        print(f"Warning: {points_txt} not found. Sampling points will be skipped.")
+        return None, None
+
+def interpolate_sampling_points(x_vec, centers, lambdas, sigma, df, scaler_z):
+    '''
+    Interpolate sampling points and descale the results
+    '''
+    zi = interpolate_torch(x_vec, centers, lambdas, sigma)
+    zi_descaled = scaler_z.inverse_transform(zi.flatten().reshape(-1, 1)).flatten()
+    df["z"] = zi_descaled
+    return df, zi, zi_descaled
+
 # Callback for the Graph
 @app.callback(
     Output('interpolation-plot', 'figure'),
@@ -145,9 +174,9 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
         return {}, html.Div()  # Return empty outputs if not clicked
     
     # Range of RBF interpolation parameters to try for best fit
-    nx_values = [10, 20, 40]  # values for nx: number of centers along x axis
-    ny_values = [10, 20, 40]  # values for ny: number of centers along y axis
-    sigma_values = [0.05, 0.1, 0.3]  # values for sigma: std. deviation of a Gaussian kernel
+    nx_values = [20]  # values for nx: number of centers along x axis
+    ny_values = [20]  # values for ny: number of centers along y axis
+    sigma_values = [0.1, 0.05, 0.01]  # values for sigma: std. deviation of a Gaussian kernel
 
 
     # Prepare data 
@@ -169,16 +198,20 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
         surf1_scaled = surf1.copy()  # No scaling if not selected
 
     
-    # Split the data into training (80%) and validation (20%)
+    # Split the data into training (90%) and validation (10%)
     # Validation data used to control overfitting
-    train_data = surf1_scaled.sample(frac=0.8, random_state=42)  # 80% for training
-    val_data = surf1_scaled.drop(train_data.index)  # Remaining 20% for validation
+    train_data = surf1_scaled.sample(frac=0.9, random_state=42)  # 90% for training
+    val_data = surf1_scaled.drop(train_data.index)  # Remaining 10% for validation
 
     # create combinations of nx, ny, sigma from lists
     combinations = np.array(list(itertools.product(nx_values, ny_values, sigma_values)))
     # filter out combinations where nx*ny > size of train_data
     # because number of centers cannot be more than the amount of data
     combinations_selected = combinations[combinations[:,0]*combinations[:, 1] <= len(train_data)]
+    grouped_combos = defaultdict(list)
+    for combo in combinations_selected:
+        nx, ny, sigma = combo
+        grouped_combos[(nx, ny)].append(sigma)
     
     # Initialize the best validation mse and parameters 
     best_mse = float('inf')
@@ -186,38 +219,26 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
 
     
     # Cross-validation loop: Try different sets of parameters (nx, ny, sigma)
-    for combo in combinations_selected:
-
-        nx, ny, sigma = combo
-        #print(nx, ny, sigma)
-                
-        # Select centers
-        # Since data is irregular and scattered, KMeans clustering is used to select centers
+    for (nx, ny), sigmas in grouped_combos.items():
+        # Calculate centers once for this nx, ny combination
         centers = select_points_kmeans(train_data[['x', 'y']].to_numpy(), nx=int(nx), ny=int(ny))
-
-        # Perform interpolation on training data
-        try:
-            # Custom function from RBFInterpolation.py script performs closed solution of RBF interpolation
-            # s are the interpolated values on the data
-            # lambdas are the solution coefficients of the kernels
-            # cond is a metadata property showing the stability of the matrix inversions(ref. condition matrix)
-            # mse is the MSE obtained between original and interpolated data for the same (x, y) coordinates as in original data
-            # residual is the difference between original and interpolated point at each coordinate (x, y)
-            s, lamdas, cond, mse, residual = rbf_interpolation_tf(train_data, centers, sigma=sigma)
-        except (ZeroDivisionError, np.linalg.LinAlgError):
-            continue  # Skip this parameter set if there's a division by zero
         
-        # Interpolate on validation data
-        x_vec_val = val_data[['x', 'y']].to_numpy()
-        zi_val = interpolate(x_vec_val, centers, lamdas, sigma=sigma)
-
-        # Calculate the validation error (MSE)
-        val_mse = mean_squared_error(val_data['z'], zi_val)
-
-        # Check if this is the best parameter set
-        if val_mse < best_mse:
-            best_mse = val_mse
-            best_params = (nx, ny, sigma)
+        # Process all sigma values for this center configuration
+        for sigma in sigmas:
+            try:
+                s, lamdas, cond, mse, residual = rbf_interpolation_torch(train_data, centers, sigma=sigma)
+                
+                x_vec_val = val_data[['x', 'y']].to_numpy()
+                zi_val = interpolate_torch(x_vec_val, centers, lamdas, sigma=sigma)
+                
+                val_mse = mean_squared_error(val_data['z'], zi_val)
+                
+                if val_mse < best_mse:
+                    best_mse = val_mse
+                    best_params = (nx, ny, sigma)
+                    
+            except (ZeroDivisionError, np.linalg.LinAlgError):
+                continue
 
                 
     # Use the best parameters found
@@ -227,17 +248,17 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
     centers = select_points_kmeans(surf1_scaled[['x', 'y']].to_numpy(), nx=int(final_nx), ny=int(final_ny))
 
     # Perform the final interpolation
-    s, lamdas, cond, mse, residual = rbf_interpolation_tf(surf1_scaled, centers, sigma=final_sigma)
+    s, lamdas, cond, mse, residual = rbf_interpolation_torch(surf1_scaled, centers, sigma=final_sigma)
 
     # Create a meshgrid for interpolation
-    xi = np.linspace(0, 1, 100)
-    yi = np.linspace(0, 1, 100)
+    xi = np.linspace(0, 1, 200)
+    yi = np.linspace(0, 1, 200)
     xi, yi = np.meshgrid(xi, yi)
     x_vec = np.column_stack((xi.flatten(), yi.flatten()))
     
     # Interpolate
-    zi = interpolate(x_vec, centers, lamdas, sigma=final_sigma)
-    zi = zi.reshape(100, 100)
+    zi = interpolate_torch(x_vec, centers, lamdas, sigma=final_sigma)
+    zi = zi.reshape(200, 200)
 
     # Descale the interpolated values
     original_xi = scaler_x.inverse_transform(xi.flatten().reshape(-1, 1)).flatten()
@@ -252,6 +273,32 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
     z_min = min(surf1['z'].min(), original_zi.min())
     z_max = max(surf1['z'].max(), original_zi.max())
 
+    # Sampling points
+    x_vec_sampling, sampling_df = points_to_xvec(points_txt="./sampling_points.txt", 
+                                                 scaler_x=scaler_x, 
+                                                 scaler_y=scaler_y)
+    
+    sampling_scatter = None
+    if x_vec_sampling is not None and sampling_df is not None:
+        sampling_df, zi_sampling, zi_descaled_sampling = interpolate_sampling_points(x_vec_sampling,
+                                                                                     centers, 
+                                                                                     lamdas,
+                                                                                     final_sigma, 
+                                                                                     sampling_df, 
+                                                                                     scaler_z)
+        
+        # Create sampling points scatter plot
+        sampling_scatter = go.Scatter3d(
+            x=sampling_df["x"], 
+            y=sampling_df["y"], 
+            z=sampling_df["z"], 
+            mode="markers", 
+            marker=dict(size=4, color='black', symbol='x'), 
+            name="SamplingPoints", 
+            hoverinfo="text", 
+            hovertemplate='Sampling Point<br>X: %{x:}<br>Y: %{y:}<br>Z: %{z:}<extra></extra>'
+        )
+
     # Plot scatter and surface togther in one plot 
     # Create the surface plot with descaled values
     surface = go.Surface(
@@ -259,7 +306,7 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
         y=original_yi.reshape(yi.shape),
         z=original_zi.reshape(zi.shape),
         colorscale='Viridis',
-        opacity=0.3,
+        opacity=0.8,
         showscale=False,
         name='Surface',
         hoverinfo='text',
@@ -273,14 +320,18 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
         y=surf1['y'],
         z=surf1['z'],
         mode='markers',
-        marker=dict(size=5, color=surf1['z'], colorscale='Viridis', showscale=True),
+        marker=dict(size=1, color=surf1['z'], colorscale='PuRd', showscale=True),
         name='Scatter',
         hoverinfo='text',
         hovertemplate='X: %{x:}<br>Y: %{y:}<br>Z: %{z:}<extra></extra>',
     )
 
-    # Create figure with both surface and scatter data
-    fig = go.Figure(data=[surface, scatter])
+    # Create figure with surface, scatter data, and sampling points
+    plot_data = [surface, scatter]
+    if sampling_scatter is not None:
+        plot_data.append(sampling_scatter)
+    
+    fig = go.Figure(data=plot_data)
 
     # Define layout with common scale
     # to add MSE in title: f"<i>Validation MSE: {best_mse:.2f}</i><br>"
@@ -321,7 +372,7 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
         x=surf1['x'],
         y=surf1['z'],
         mode='markers',
-        marker=dict(color='red', size=5),
+        marker=dict(color='red', size=2),
         name='True'
     ))
     # interpolated data
@@ -331,7 +382,7 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
         mode='markers',
         line=dict(color='blue', width=2),  # Set line color and width
         name='Best Fit',
-        opacity=0.5  # Set transparency for the line here
+        opacity=0.8  # Set transparency for the line here
     ))
     projection_x.update_layout(
         title='Projection along X',
@@ -350,7 +401,7 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
         x=surf1['y'],
         y=surf1['z'],
         mode='markers',
-        marker=dict(color='red', size=5),
+        marker=dict(color='red', size=2),
         name='True'
     ))
     # interpolated data
@@ -360,7 +411,7 @@ def update_graph(n_clicks, x_col, y_col, z_col, scale_data):
         mode='markers',
         line=dict(color='blue', width=2),  # Set line color and width
         name='Best Fit',
-        opacity=0.5  # Set transparency for the line here
+        opacity=0.8  # Set transparency for the line here
     ))
     projection_y.update_layout(
         title='Projection along Y',
