@@ -12,10 +12,12 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 import time
 import itertools
-from collections import defaultdict
 # Custom scripts for RBF Interpolation
 from rbf_pytorch import *
 
+# multiprocessing tools
+import multiprocessing as mp
+from functools import partial
 
 
 def points_to_xvec(points_txt:str, scaler_x, scaler_y):
@@ -40,10 +42,35 @@ def interpolate_sampling_points(x_vec, centers, lambdas, sigma, df, scaler_z):
     df["z"] = zi_descaled
     return df, zi, zi_descaled
 
+def evaluate_params(combo, train_data, val_data, centers_func):
+    """Evaluate a single parameter combination"""
+    nx, ny, sigma = combo
+    
+    try:
+        # Select centers
+        centers = centers_func(train_data[['x', 'y']].to_numpy(), nx=int(nx), ny=int(ny))
+        
+        # Perform interpolation on training data
+        s, lamdas, cond, mse, residual = rbf_interpolation_torch(train_data, centers, sigma=sigma)
+        
+        # Interpolate on validation data
+        x_vec_val = val_data[['x', 'y']].to_numpy()
+        zi_val = interpolate_torch(x_vec_val, centers, lamdas, sigma=sigma)
+        
+        # Calculate validation MSE
+        val_mse = mean_squared_error(val_data['z'], zi_val)
+        
+        return combo, val_mse, cond
+    except (ZeroDivisionError, np.linalg.LinAlgError):
+        return combo, float('inf'), float('inf')
+    
+
+
 
 def main():
     txt_file_path = "./surf1.txt" #sys.argv[1]
-
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
     # Load the dataset
     # For TXT files with comma-separated values, use read_csv with appropriate parameters
     data = pd.read_csv(txt_file_path, delimiter=',', header=None, names=["x", "y", "z"])
@@ -84,56 +111,51 @@ def main():
     # Validation data used to control overfitting
     train_data = surf1_scaled.sample(frac=0.8, random_state=42)  # 80% for training
     val_data = surf1_scaled.drop(train_data.index)  # Remaining 20% for validation
+    # Convert data to tensors and move to GPU
+    # train_tensor = torch.tensor(train_data.values, dtype=torch.float32, device=device)
+    # val_tensor = torch.tensor(val_data.values, dtype=torch.float32, device=device)
 
-    # # create combinations of nx, ny, sigma from lists
+    # create combinations of nx, ny, sigma from lists
     combinations = np.array(list(itertools.product(nx_values, ny_values, sigma_values)))
-    # # filter out combinations where nx*ny > size of train_data
-    # # because number of centers cannot be more than the amount of data
+    # filter out combinations where nx*ny > size of train_data
+    # because number of centers cannot be more than the amount of data
     combinations_selected = combinations[combinations[:,0]*combinations[:, 1] <= len(train_data)]
-    grouped_combos = defaultdict(list)
-    for combo in combinations_selected:
-        nx, ny, sigma = combo
-        grouped_combos[(nx, ny)].append(sigma)
     
     # Initialize the best validation mse and parameters 
     best_mse = float('inf')
     best_params = (None, None, None)
-    
-    centers_func = select_points_kmeans
-
-    
+        
     # Cross-validation loop: Try different sets of parameters (nx, ny, sigma)
     print("nx ny sigma valmse")
-    for (nx, ny), sigmas in grouped_combos.items():
-        # Calculate centers once for this nx, ny combination
-        centers = centers_func(train_data[['x', 'y']].to_numpy(), nx=int(nx), ny=int(ny))
-        
-        # Process all sigma values for this center configuration
-        for sigma in sigmas:
-            try:
-                s, lamdas, cond, mse, residual = rbf_interpolation_torch(train_data, centers, sigma=sigma)
-                
-                x_vec_val = val_data[['x', 'y']].to_numpy()
-                zi_val = interpolate_torch(x_vec_val, centers, lamdas, sigma=sigma)
-                
-                val_mse = mean_squared_error(val_data['z'], zi_val)
-                print(f"{nx:3.0f} {ny:3.0f} {sigma:6.3f} {val_mse:10.4f} {cond:10.4f}")
-                
-                if val_mse < best_mse:
-                    best_mse = val_mse
-                    best_params = (nx, ny, sigma)
-                    
-            except (ZeroDivisionError, np.linalg.LinAlgError):
-                continue
 
-                
+
+    # Create partial function with fixed arguments
+    evaluate_func = partial(evaluate_params, 
+                        train_data=train_data, 
+                        val_data=val_data, 
+                        centers_func=select_points_kmeans)    
+
+    # Use multiprocessing Pool
+    with mp.Pool(processes=mp.cpu_count()) as pool:
+        results = pool.map(evaluate_func, combinations_selected)
+
+        # Find best parameters
+    for combo, val_mse, cond in results:
+        if val_mse != float('inf'):
+            nx, ny, sigma = combo
+            print(f"{nx:3.0f} {ny:3.0f} {sigma:6.3f} {val_mse:10.4f} {cond:10.4f}")
+            
+            if val_mse < best_mse:
+                best_mse = val_mse
+                best_params = combo
+
     # Use the best parameters found
     final_nx, final_ny, final_sigma = best_params
     print(f"Best params:")
     print(f"nx: {final_nx}, ny: {final_ny}, sigma:{final_sigma} with MSE: {best_mse}")
 
     # Perform interpolation again with the best parameters
-    centers = centers_func(surf1_scaled[['x', 'y']].to_numpy(), nx=int(final_nx), ny=int(final_ny))
+    centers = select_points_kmeans(surf1_scaled[['x', 'y']].to_numpy(), nx=int(final_nx), ny=int(final_ny))
 
     # Perform the final interpolation
     s, lamdas, cond, mse, residual = rbf_interpolation_torch(surf1_scaled, centers, sigma=final_sigma)

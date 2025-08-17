@@ -8,79 +8,7 @@ import matplotlib.pyplot as plt
 
 from utils_torch import *
 
-def select_points_grid(points, nx, ny):
-    """
-    Select a subset of points from a given set using grid sampling.
-
-    This function samples points from a grid that covers the area defined by the 
-    minimum and maximum x and y coordinates of the input points. The grid is created 
-    with `nx` points along the x-direction, and the number of points along the y-direction
-    is determined based on the aspect ratio of the point set.
-
-    Parameters:
-    -----------
-    points : numpy.ndarray
-        An array of shape (n, 2) where `n` is the number of original points. Each row represents a point
-        with x and y coordinates.
-
-    nx : int
-        The number of grid points along the x-direction.
-
-    Returns:
-    --------
-    numpy.ndarray
-        An array of shape (nx * ny, 2) where `ny` is calculated based on the aspect ratio of the point set. 
-        This array contains the selected points closest to the grid points.
-
-    Notes:
-    ------
-    - The function calculates the aspect ratio of the input point set to determine the number of points
-      along the y-direction (`ny`).
-    - A grid is created with `nx` points in the x-direction and `ny` points in the y-direction.
-    - For each grid point, the closest point from the original set is selected.
-
-    Example:
-    --------
-    >>> points = np.array([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]])
-    >>> selected_points = select_points_grid(points, nx=5)
-    >>> print(selected_points)
-    [[0. 0.]
-     [1. 1.]
-     [2. 2.]
-     [3. 3.]
-     [4. 4.]]
-    """
-    
-    # Calculate aspect ratio from data
-    x_min, x_max = points[:, 0].min(), points[:, 0].max()
-    y_min, y_max = points[:, 1].min(), points[:, 1].max()
-    aspect_ratio = (x_max - x_min) / (y_max - y_min)
-
-    # Calculate the number of points along the y-direction based on aspect ratio
-    #ny = int(nx / aspect_ratio)
-    #ny = len(points[:, 1])
-    
-    # Create a grid of points
-    x_grid = np.linspace(x_min, x_max, nx)
-    y_grid = np.linspace(y_min, y_max, ny)
-    xv, yv = np.meshgrid(x_grid, y_grid)
-    
-    grid_points = np.vstack([xv.ravel(), yv.ravel()]).T
-
-    # Find the closest point in the original set for each grid point
-    selected_points = []
-    for gp in grid_points:
-        # Compute the Euclidean distance from the grid point to all original points
-        distances = np.sum((points - gp) ** 2, axis=1)
-        # Find the index of the closest point
-        closest_point = points[np.argmin(distances)]
-        selected_points.append(closest_point)
-
-    return np.array(selected_points)
-
-
-
-def select_points_kmeans(points, nx, ny):
+def select_points_kmeans(points, nx, ny, plot = False):
     """
     Select a subset of points using K-Means clustering.
 
@@ -97,27 +25,15 @@ def select_points_kmeans(points, nx, ny):
     nx : int
         The number of grid points along the x-direction. The total number of selected points will be
         calculated based on this value and the aspect ratio of the data.
+        
+    plot : bool, optional
+        If True, plots the original points and selected centers. Default is False.
 
     Returns:
     --------
     numpy.ndarray
         An array of shape (nx * ny, 2) where `ny` is calculated based on the aspect ratio of the point set. 
         This array contains the selected points as the cluster centers.
-
-    Notes:
-    ------
-    - The aspect ratio of the data is used to determine the number of points along the y-direction (`ny`).
-    - K-Means clustering is performed with `num_points` clusters, where `num_points = nx * ny`.
-    - The cluster centers from the K-Means algorithm are used as the selected points.
-
-    Example:
-    --------
-    >>> points = np.array([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]])
-    >>> selected_points = select_points_kmeans(points, nx=5)
-    >>> print(selected_points)
-    [[0. 0.]
-     [4. 4.]
-     [2. 2.]]
     """
     
     # Calculate aspect ratio from data
@@ -125,106 +41,53 @@ def select_points_kmeans(points, nx, ny):
     y_min, y_max = points[:, 1].min(), points[:, 1].max()
     aspect_ratio = (x_max - x_min) / (y_max - y_min)
 
-    # Calculate the number of points along the y-direction based on aspect ratio
-    #ny = int(nx / aspect_ratio)
-    #ny = len(points[:, 1])
-    
     # Total number of points to select
     num_points = nx * ny
+    # Perform K-Means clustering using GPU if available
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    points_tensor = torch.FloatTensor(points).to(device)
+    
+    # Initialize centers randomly
+    idx = torch.randperm(len(points_tensor))[:num_points]
+    centers = points_tensor[idx].clone()
+    
+    # K-means iterations
+    max_iters = 100
+    for _ in range(max_iters):
+        # Calculate distances
+        distances = torch.cdist(points_tensor, centers)
+        # Assign points to nearest center
+        labels = torch.argmin(distances, dim=1)
+        # Update centers
+        new_centers = torch.zeros_like(centers)
+        for k in range(num_points):
+            mask = labels == k
+            if mask.any():
+                new_centers[k] = points_tensor[mask].mean(0)
+            else:
+                new_centers[k] = centers[k]
+        # Check convergence
+        if torch.all(centers == new_centers):
+            break
+        centers = new_centers
+    
+    selected_points = centers.cpu().numpy()
 
-    # Perform K-Means clustering to select the points
-    kmeans = KMeans(n_clusters=num_points, random_state=42, n_init=3)
-    kmeans.fit(points)
-    selected_points = kmeans.cluster_centers_
+    # Plot if requested
+    if plot:
+        fig_width = 10  # Base width
+        fig_height = fig_width / aspect_ratio  # Height adjusted by aspect ratio
+        plt.figure(figsize=(fig_width, fig_height))
+        plt.scatter(points[:, 0], points[:, 1], c='blue', alpha=0.8, s = 20, label='Original points')
+        plt.scatter(selected_points[:, 0], selected_points[:, 1], c='red', marker='x', s=100, label='Centers')
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title(f'K-Means Centers (n={num_points})')
+        plt.legend()
+        plt.savefig("./centers.png")
 
     return selected_points
 
-
-
-def homogenous_centers(data, nx, ny, plot=False):
-    """
-    Generate a grid of evenly spaced centers within the bounds of the provided data.
-
-    This function creates a grid of points (centers) uniformly distributed across the x and y 
-    dimensions of the data. The number of grid points along the x-direction (`nx`) is specified,
-    and the number of grid points along the y-direction is calculated based on the aspect ratio of 
-    the data's bounding box. Optionally, the function can plot the grid of centers.
-
-    Parameters:
-    -----------
-    data : numpy.ndarray or pd.DataFrame
-        The input data containing x and y coordinates. If a NumPy array, it should be of shape 
-        (n, 2). If a DataFrame, it should contain columns 'x' and 'y'.
-
-    nx : int
-        The number of grid points along the x-direction.
-
-    plot : bool, optional
-        If True, a plot of the grid centers will be displayed. Default is False.
-
-    Returns:
-    --------
-    numpy.ndarray
-        An array of shape (nx * ny, 2) containing the coordinates of the grid centers.
-
-    Notes:
-    ------
-    - The number of grid points along the y-direction (`ny`) is calculated based on the aspect ratio
-      of the bounding box of the data.
-    - The grid centers are created using `np.meshgrid` and then reshaped into the desired format.
-
-    Example:
-    --------
-    >>> data = np.array([[1, 2], [3, 4], [5, 6]])
-    >>> centers = homogenous_centers(data, nx=10, plot=True)
-    >>> print(centers)
-    [[1. 1.]
-     [1. 2.]
-     [1. 3.]
-     ...
-     [10. 10.]]
-    """
-    
-    # Determine the bounds of the data
-    if isinstance(data, np.ndarray):
-        xmin, xmax = np.min(data[:, 0]), np.max(data[:, 0])
-        ymin, ymax = np.min(data[:, 1]), np.max(data[:, 1])
-    elif isinstance(data, pd.DataFrame):
-        xmin, xmax = data.x.min(), data.x.max()
-        ymin, ymax = data.y.min(), data.y.max()
-    else:
-        raise TypeError("Input data must be a numpy.ndarray or pandas.DataFrame.")
-    
-    # Calculate the aspect ratio of the data bounds
-    lenx = xmax - xmin
-    leny = ymax - ymin
-    aspect_ratio = lenx / leny
-    
-    # Calculate the number of grid points along the y-direction
-    #ny = int(nx / aspect_ratio)
-    #ny = len(points[:, 1])
-    
-    # Generate grid points along x and y
-    cx = np.linspace(xmin, xmax, nx, endpoint=True)
-    cy = np.linspace(ymin, ymax, ny, endpoint=True)
-    Cx, Cy = np.meshgrid(cx, cy)
-    
-    # Create a grid of centers
-    centres = np.zeros((nx, ny, 2))
-    centres[:, :, 0] = Cy
-    centres[:, :, 1] = Cx
-    
-    # Optionally plot the grid of centers
-    if plot:
-        plt.figure(figsize=(12, 8))
-        plt.plot(Cx, Cy, marker='o', color='k', lw=0.2, markersize=0.5, linestyle='none')
-        plt.xlabel('x')
-        plt.ylabel('y')
-        plt.title('Centers in XY Space')
-        plt.axis('square')
-        plt.show()
-    
-    return centres.reshape(-1, 2)
 
 def rbf_interpolation(data, centers, sigma):
     """
