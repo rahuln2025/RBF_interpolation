@@ -2,6 +2,8 @@
 
 A PyTorch-based implementation for Radial Basis Function (RBF) interpolation with Gaussian kernels, featuring both standalone scripts and a minimal Dash web interface.
 
+[Checkout the interactive plots](https://rahuln2025.github.io/RBF_interpolation/)
+
 ## Description
 
 This project provides GPU-accelerated RBF interpolation for 3D surface reconstruction:
