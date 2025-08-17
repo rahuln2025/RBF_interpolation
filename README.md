@@ -4,7 +4,7 @@ A PyTorch-based implementation for Radial Basis Function (RBF) interpolation wit
 
 [Checkout the interactive plots](https://rahuln2025.github.io/RBF_interpolation/)
 
-*This project was my solution to a programming task with a timeline of 1 week for an application to a student-job in ASML Berlin. I modified my solution (which used TensorFlow for GPU computations) and added the dash-app later.* 
+*This project was my solution to a programming task with a timeline of 1 week for an application to a student-job in ASML Berlin. I modified my solution (which used TensorFlow for GPU computations) and added the dash-app later. Check out my [presentation](ASML_Task_RBFInterpolation.pdf) explaining RBF-Interpolation in short, with some analysis on the interpolation quality.* 
 
 ## Description
 
