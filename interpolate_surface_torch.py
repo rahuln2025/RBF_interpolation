@@ -19,26 +19,63 @@ from rbf_pytorch import *
 
 
 def points_to_xvec(points_txt:str, scaler_x, scaler_y):
+    """
+    Process 2D point coordinates from text file and scale them.
+    Args:
+        points_txt (str): Path to text file containing x,y coordinates.
+        scaler_x: Scaler object for x coordinates.
+        scaler_y: Scaler object for y coordinates.
+    Returns:
+        tuple: (x_vec, df) where:
+            - x_vec (ndarray): Scaled coordinates as Nx2 array
+            - df (DataFrame): Original unscaled coordinates
+    """
+    # read the points
     df = pd.read_csv(points_txt, delimiter=",", header=None, names=["x", "y"])
     print(f"Number of sampling points:{len(df)}")
     #scale the sampling point x, y coords 
     df_scaled = pd.DataFrame(scaler_x.fit_transform(df[["x"]]), columns=["x"])
     df_scaled["y"] = scaler_y.fit_transform(df[["y"]])
     
-    # create meshgrid and input for rbf interpolation
-    # xi, yi = np.meshgrid(df_scaled["x"].to_numpy(), df_scaled["y"].to_numpy())
-    # x_vec = np.column_stack((xi.flatten(), yi.flatten()))
     x_vec = df_scaled[["x", "y"]].to_numpy()
 
     return x_vec, df
 
 def interpolate_sampling_points(x_vec, centers, lambdas, sigma, df, scaler_z):
+    """
+    Interpolates values at sampling points and saves results to a file.
+
+    Parameters
+    ----------
+    x_vec : torch.Tensor
+        Input points tensor of shape (n_points, 2) containing x,y coordinates
+    centers : torch.Tensor  
+        Centers of RBF functions of shape (n_centers, 2)
+    lambdas : torch.Tensor
+        RBF coefficients tensor of shape (n_centers,)
+    sigma : float
+        RBF spread parameter (sigma)
+    df : pd.DataFrame
+        DataFrame containing sampling points
+    scaler_z : sklearn.preprocessing._data.StandardScaler
+        StandardScaler used to normalize z values
+
+    Returns
+    -------
+    tuple
+        - df : pd.DataFrame with interpolated z values added
+        - zi : torch.Tensor of interpolated values before inverse scaling
+        - zi_descaled : numpy.ndarray of final interpolated values after inverse scaling 
+    """
+    # interpolate
     zi = interpolate_torch(x_vec, centers, lambdas, sigma)
     print(f'zi shape:{zi.shape}')
+    # descale
     zi_descaled = scaler_z.inverse_transform(zi.flatten().reshape(-1, 1)).flatten()
     print(f'zi_descaled shape:{zi_descaled.shape}')
+    # save output
     df["z"] = zi_descaled
-    df.to_csv("./interpolated_sampling_points.txt")
+    df.to_csv("./results/interpolated_sampling_points.txt")
     return df, zi, zi_descaled
 
 
@@ -46,7 +83,6 @@ def main():
     txt_file_path = "./data/surf1.txt" #sys.argv[1]
 
     # Load the dataset
-    # For TXT files with comma-separated values, use read_csv with appropriate parameters
     data = pd.read_csv(txt_file_path, delimiter=',', header=None, names=["x", "y", "z"])
 
     # Range of RBF interpolation parameters to try for best fit
@@ -58,8 +94,7 @@ def main():
     x_col = "x"
     y_col = "y" 
     z_col = "z"
-    scale_data = ["scale"]  # or [] if you don't want scaling
-
+    scale_data = ["scale"]  # or [] if you don't want scaling (Scaling recommended)
 
     # Prepare data 
     # Only the columns selected by user are now indexed
@@ -167,8 +202,8 @@ def main():
                            scaler_x = scaler_x, 
                            scaler_y = scaler_y, 
                            )
-
-    sampling_df, zi_sampling, zi_descaled_sampling = interpolate_sampling_points(x_vec_sampling,
+    # get interpolated z values for sampling points
+    sampling_df, _, _ = interpolate_sampling_points(x_vec_sampling,
                                                                centers, 
                                                                lamdas,
                                                                final_sigma, 
@@ -216,7 +251,7 @@ def main():
     )
 
     # Create figure with both surface and scatter data
-    fig = go.Figure(data=[surface, scatter_sampling])
+    fig = go.Figure(data=[surface, scatter, scatter_sampling])
 
     # Define layout with common scale
     # to add MSE in title: f"<i>Validation MSE: {best_mse:.2f}</i><br>"
@@ -249,7 +284,6 @@ def main():
 
 
     # Projections along x and y axis are also displayed for ease of visualization 
-    
     # Create Plotly projection plots for projection along x
     # original data
     projection_x = go.Figure()
