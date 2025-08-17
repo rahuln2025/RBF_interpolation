@@ -10,7 +10,11 @@ This project provides GPU-accelerated RBF interpolation for 3D surface reconstru
 - Sampling point interpolation from custom coordinate files
 - 3D surface plots with projection views
 
-{%include_relative ./surface_plot.html%}
+## Interactive Demo
+
+[View Interactive 3D Surface Plot](surface_plot.html)
+
+*Click the link above to see a live example of the 3D surface interpolation with original data points and sampling locations.*
 
 
 ## Key Features

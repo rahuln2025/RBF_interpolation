@@ -1,0 +1,48 @@
+title: RBF Interpolation with PyTorch
+description: GPU-accelerated Radial Basis Function interpolation for 3D surface reconstruction
+author: Rahul Narkhede
+email: rahul@example.com
+
+# GitHub Pages settings
+theme: jekyll-theme-minimal
+plugins:
+  - jekyll-relative-links
+
+# Repository settings
+repository: rahuln2025/RBF_interpolation
+github_username: rahuln2025
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+relative_links:
+  enabled: true
+  collections: true
+
+# Include/Exclude files
+include:
+  - README.md
+  - surface_plot.html
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+
+# Collections
+collections:
+  pages:
+    output: true
+    permalink: /:name/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"

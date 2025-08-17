@@ -86,9 +86,9 @@ def main():
     data = pd.read_csv(txt_file_path, delimiter=',', header=None, names=["x", "y", "z"])
 
     # Range of RBF interpolation parameters to try for best fit
-    nx_values = [20, 40, 60]  # values for nx: number of centers along x axis
-    ny_values = [20, 40, 60]  # values for ny: number of centers along y axis
-    sigma_values = [0.05, 0.025, 0.01]  # values for sigma: std. deviation of a Gaussian kernel
+    nx_values = [20,  60]  # values for nx: number of centers along x axis
+    ny_values = [20, 60]  # values for ny: number of centers along y axis
+    sigma_values = [0.05, 0.01]  # values for sigma: std. deviation of a Gaussian kernel
 
     # Define variables
     x_col = "x"
@@ -357,7 +357,7 @@ def main():
     
     # Save the surface plot
     surface_plot_path = os.path.join(ws_path, "./results/surface_plot.html")
-    fig.write_html(surface_plot_path)
+    fig.write_html(surface_plot_path,full_html=False, include_plotlyjs='cdn')
     
     # # Save projection plots as HTML files
     projection_x.write_html("./results/projection_x.html")
