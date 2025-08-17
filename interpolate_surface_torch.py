@@ -43,16 +43,16 @@ def interpolate_sampling_points(x_vec, centers, lambdas, sigma, df, scaler_z):
 
 
 def main():
-    txt_file_path = "./surf1.txt" #sys.argv[1]
+    txt_file_path = "./data/surf1.txt" #sys.argv[1]
 
     # Load the dataset
     # For TXT files with comma-separated values, use read_csv with appropriate parameters
     data = pd.read_csv(txt_file_path, delimiter=',', header=None, names=["x", "y", "z"])
 
     # Range of RBF interpolation parameters to try for best fit
-    nx_values = [20]  # values for nx: number of centers along x axis
-    ny_values = [20]  # values for ny: number of centers along y axis
-    sigma_values = [0.1, 0.05, 0.01]  # values for sigma: std. deviation of a Gaussian kernel
+    nx_values = [20, 40, 60]  # values for nx: number of centers along x axis
+    ny_values = [20, 40, 60]  # values for ny: number of centers along y axis
+    sigma_values = [0.05, 0.025, 0.01]  # values for sigma: std. deviation of a Gaussian kernel
 
     # Define variables
     x_col = "x"
@@ -163,7 +163,7 @@ def main():
     z_max = max(surf1['z'].max(), original_zi.max())
 
     # sampling points
-    x_vec_sampling, sampling_df = points_to_xvec(points_txt = "./sampling_points.txt", 
+    x_vec_sampling, sampling_df = points_to_xvec(points_txt = "./data/sampling_points.txt", 
                            scaler_x = scaler_x, 
                            scaler_y = scaler_y, 
                            )
@@ -322,12 +322,12 @@ def main():
     os.makedirs(ws_path, exist_ok=True)
     
     # Save the surface plot
-    surface_plot_path = os.path.join(ws_path, "surface_plot.html")
+    surface_plot_path = os.path.join(ws_path, "./results/surface_plot.html")
     fig.write_html(surface_plot_path)
     
     # # Save projection plots as HTML files
-    projection_x.write_html("projection_x.html")
-    projection_y.write_html("projection_y.html")
+    projection_x.write_html("./results/projection_x.html")
+    projection_y.write_html("./results/projection_y.html")
     
     print("Files saved:")
     print("- surface_plot.html (3D surface plot)")

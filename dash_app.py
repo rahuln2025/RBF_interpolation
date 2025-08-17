@@ -26,7 +26,7 @@ from rbf_pytorch import select_points_kmeans, interpolate_torch, rbf_interpolati
 #     print("Usage: python app.py <txt_file_path>")
 #     sys.exit(1)
 
-txt_file_path = "./surf1.txt" #sys.argv[1]
+txt_file_path = "./data/surf1.txt" #sys.argv[1]
 
 # Load the dataset
 # For TXT files with comma-separated values, use read_csv with appropriate parameters
