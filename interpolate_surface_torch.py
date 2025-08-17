@@ -38,6 +38,7 @@ def interpolate_sampling_points(x_vec, centers, lambdas, sigma, df, scaler_z):
     zi_descaled = scaler_z.inverse_transform(zi.flatten().reshape(-1, 1)).flatten()
     print(f'zi_descaled shape:{zi_descaled.shape}')
     df["z"] = zi_descaled
+    df.to_csv("./interpolated_sampling_points.txt")
     return df, zi, zi_descaled
 
 
@@ -49,8 +50,8 @@ def main():
     data = pd.read_csv(txt_file_path, delimiter=',', header=None, names=["x", "y", "z"])
 
     # Range of RBF interpolation parameters to try for best fit
-    nx_values = [20, 40, 60]  # values for nx: number of centers along x axis
-    ny_values = [20, 40, 60]  # values for ny: number of centers along y axis
+    nx_values = [20]  # values for nx: number of centers along x axis
+    ny_values = [20]  # values for ny: number of centers along y axis
     sigma_values = [0.1, 0.05, 0.01]  # values for sigma: std. deviation of a Gaussian kernel
 
     # Define variables
@@ -82,7 +83,7 @@ def main():
     
     # Split the data into training (80%) and validation (20%)
     # Validation data used to control overfitting
-    train_data = surf1_scaled.sample(frac=0.8, random_state=42)  # 80% for training
+    train_data = surf1_scaled.sample(frac=0.9, random_state=42)  # 80% for training
     val_data = surf1_scaled.drop(train_data.index)  # Remaining 20% for validation
 
     # # create combinations of nx, ny, sigma from lists
@@ -103,7 +104,7 @@ def main():
 
     
     # Cross-validation loop: Try different sets of parameters (nx, ny, sigma)
-    print("nx ny sigma valmse")
+    print("nx ny sigma valmse cond")
     for (nx, ny), sigmas in grouped_combos.items():
         # Calculate centers once for this nx, ny combination
         centers = centers_func(train_data[['x', 'y']].to_numpy(), nx=int(nx), ny=int(ny))
